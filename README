@@ -1,0 +1,8 @@
+ptrace system call wrapper for Ruby.
+====================================
+
+Author: Koichi Sasada
+Create Date: Wed Sep 17 04:19:52 2008
+
+See sample/* for details.
+This version of ruby-ptrace only supports x86 GNU/Linux.

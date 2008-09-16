@@ -1,0 +1,14 @@
+# start
+
+ptrace.o: Makefile $(srcdir)/ptrace.c
+
+run: ptrace.so
+	$(ruby) $(srcdir)/sample/minitrace.rb ls
+
+Makefile: $(srcdir)/extconf.rb $(srcdir)/depend
+
+tarball:
+	tar cfvz $(srcdir)/ruby-ptrace.tar.gz -C $(srcdir) \
+	extconf.rb sample.rb ptrace.c depend
+
+# end
