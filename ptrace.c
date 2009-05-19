@@ -81,7 +81,7 @@ ptrace_peekdata(VALUE self, VALUE addr)
 static VALUE
 ptrace_peekuser(VALUE self, VALUE addr)
 {
-    return ptrace_peek(self, addr, PTRACE_PEEKUSER);
+    return ptrace_peek(self, PTRACE_PEEKUSER, addr);
 }
 
 static VALUE
@@ -89,10 +89,10 @@ ptrace_poke(VALUE self, enum __ptrace_request request, VALUE addr, VALUE data)
 {
     pid_t pid = get_pid(self);
     void *addr_ptr = (void *)NUM2ULONG(addr);
-    long long_data = (long)NUM2ULONG(data);
+    void *long_data = (void *)NUM2LONG(data);
     long ret;
 
-    CALL_PTRACE(ret, request, pid, addr_ptr, &long_data);
+    CALL_PTRACE(ret, request, pid, addr_ptr, long_data);
 
     return Qnil;
 }
