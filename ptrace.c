@@ -14,6 +14,8 @@
 #include <sys/wait.h>
 #include <linux/ptrace.h>
 
+#define HAVE_PTRACE_SYSEMU 1
+
 #define CALL_PTRACE(ret, request, pid, addr, data) do { \
 	ret = ptrace(request, pid, addr, data); \
 	if (ret == -1) { \
@@ -81,7 +83,7 @@ ptrace_peekdata(VALUE self, VALUE addr)
 static VALUE
 ptrace_peekuser(VALUE self, VALUE addr)
 {
-    return ptrace_peek(self, PTRACE_PEEKUSER, addr);
+     return ptrace_peek(self, PTRACE_PEEKUSER, addr);
 }
 
 static VALUE
@@ -337,7 +339,6 @@ ptrace_getsiginfo(VALUE self)
     v = rb_hash_new();
 
 #define SI_SET(name, val) rb_hash_aset(v, ID2SYM(rb_intern("si_" #name)), val)
-
     SI_SET(sig, si_signo_symbol(si.si_signo));
     SI_SET(signo, INT2NUM(si.si_signo));
     SI_SET(errno, INT2NUM(si.si_errno));
@@ -382,7 +383,32 @@ ptrace_getsiginfo(VALUE self)
 static VALUE
 ptrace_setregs(VALUE self, VALUE data)
 {
-    UNSUPPORTED();
+    struct user_regs_struct urs;
+    void *data_ptr = (void *)&urs;
+    pid_t pid = get_pid(self);
+    long ret;
+
+#define SET(reg) {VALUE v = rb_struct_getmember(data, rb_intern(#reg)); urs.reg = NUM2ULONG(v);}
+    SET(ebx);
+    SET(ecx);
+    SET(edx);
+    SET(esi);
+    SET(edi);
+    SET(ebp);
+    SET(eax);
+    SET(xds);
+    SET(xes);
+    SET(xfs);
+    SET(xgs);
+    SET(orig_eax);
+    SET(eip);
+    SET(xcs);
+    SET(eflags);
+    SET(esp);
+    SET(xss);
+#undef SET
+
+    CALL_PTRACE(ret, PTRACE_SETREGS, pid, 0, data_ptr);
     return Qnil;
 }
 
@@ -446,17 +472,25 @@ ptrace_singlestep(int argc, VALUE *argv, VALUE self)
 
 #ifdef HAVE_PTRACE_SYSEMU
 static VALUE
-ptrace_sysemu(VALUE self)
+ptrace_sysemu(int argc, VALUE *argv, VALUE self)
 {
-    return ptrace_continue(self, PTRACE_SYSEMU, INT2FIX(0));
+    VALUE data = INT2FIX(0);
+    if (argc == 1) {
+	data = argv[0];
+    }
+    return ptrace_continue(self, PTRACE_SYSEMU, data);
 }
 #endif
 
 #ifdef HAVE_PTRACE_SYSEMU_SINGLESTEP
 static VALUE
-ptrace_sysemu_singlestep(VALUE self)
+ptrace_sysemu_singlestep(int argc, VALUE *argv, VALUE self)
 {
-    return ptrace_continue(self, PTRACE_SYSEMU_SINGLESTEP, INT2FIX(0));
+    VALUE data = INT2FIX(0);
+    if (argc == 1) {
+	data = argv[0];
+    }
+    return ptrace_continue(self, PTRACE_SYSEMU_SINGLESTEP, data);
 }
 #endif
 

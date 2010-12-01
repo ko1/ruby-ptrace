@@ -1,27 +1,19 @@
 require 'ptrace'
 
-class PTrace
-  def initialize
-    pid = fork{
-      yield
-    }
-    self.__attach__(pid)
-    __set_pid__ pid
-  end
-end
+pt = PTrace.exec(ARGV.shift)
+pt.wait
+pt.cont
 
-ptrace = PTrace.new{
-  p [$$, :hello]
-  Process.kill :USR1, $$
-}
-
-while e = ptrace.wait
+while e = pt.wait
+  p e
   case e
   when :SIGTRAP
-    p [e, ptrace.getregs.orig_eax]
-    ptrace.syscall
+    pt.cont :SIGUSR1
+  when :SIGSEGV
+    pt.syscall :SIGSEGV
+  when :SIGUSR1
+    pt.singlestep
   else
-    ptrace.syscall e
+    pt.syscall e
   end
 end
-
