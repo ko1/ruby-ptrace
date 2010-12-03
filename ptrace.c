@@ -12,9 +12,9 @@
 #include <errno.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-#include <linux/ptrace.h>
-
-#define HAVE_PTRACE_SYSEMU 1
+#include <sys/ptrace.h>
+typedef enum __ptrace_request ptrace_request;
+//#define HAVE_PTRACE_SYSEMU 1
 
 #define CALL_PTRACE(ret, request, pid, addr, data) do { \
 	ret = ptrace(request, pid, addr, data); \
@@ -45,14 +45,14 @@ get_pid(VALUE self)
 }
 
 static void
-ptrace_error(enum __ptrace_request request, int err)
+ptrace_error(ptrace_request request, int err)
 {
     rb_raise(rb_ePTraceError, "ptrace error (%d): %s (%d)",
 	     request, strerror(err), err);
 }
 
 static VALUE
-ptrace_peek(VALUE self, enum __ptrace_request request, VALUE addr)
+ptrace_peek(VALUE self, ptrace_request request, VALUE addr)
 {
     pid_t pid = get_pid(self);
     void *ptr = (void *)NUM2ULONG(addr);
@@ -71,23 +71,23 @@ ptrace_peek(VALUE self, enum __ptrace_request request, VALUE addr)
 static VALUE
 ptrace_peektext(VALUE self, VALUE addr)
 {
-    return ptrace_peek(self, PTRACE_PEEKTEXT, addr);
+    return ptrace_peek(self, PT_READ_I, addr);
 }
 
 static VALUE
 ptrace_peekdata(VALUE self, VALUE addr)
 {
-    return ptrace_peek(self, PTRACE_PEEKDATA, addr);
+    return ptrace_peek(self, PT_READ_D, addr);
 }
 
 static VALUE
 ptrace_peekuser(VALUE self, VALUE addr)
 {
-     return ptrace_peek(self, PTRACE_PEEKUSER, addr);
+     return ptrace_peek(self, PT_READ_U, addr);
 }
 
 static VALUE
-ptrace_poke(VALUE self, enum __ptrace_request request, VALUE addr, VALUE data)
+ptrace_poke(VALUE self, ptrace_request request, VALUE addr, VALUE data)
 {
     pid_t pid = get_pid(self);
     void *addr_ptr = (void *)NUM2ULONG(addr);
@@ -102,19 +102,19 @@ ptrace_poke(VALUE self, enum __ptrace_request request, VALUE addr, VALUE data)
 static VALUE
 ptrace_poketext(VALUE self, VALUE addr, VALUE data)
 {
-    return ptrace_poke(self, PTRACE_POKETEXT, addr, data);
+    return ptrace_poke(self, PT_WRITE_I, addr, data);
 }
 
 static VALUE
 ptrace_pokedata(VALUE self, VALUE addr, VALUE data)
 {
-    return ptrace_poke(self, PTRACE_POKEDATA, addr, data);
+    return ptrace_poke(self, PT_WRITE_D, addr, data);
 }
 
 static VALUE
 ptrace_pokeuser(VALUE self, VALUE addr, VALUE data)
 {
-    return ptrace_poke(self, PTRACE_POKEUSER, addr, data);
+    return ptrace_poke(self, PT_WRITE_U, addr, data);
 }
 
 static VALUE
@@ -126,7 +126,7 @@ ptrace_getregs(VALUE self)
     long ret;
     VALUE v = Qnil;
 
-    CALL_PTRACE(ret, PTRACE_GETREGS, pid, 0, data_ptr);
+    CALL_PTRACE(ret, PT_GETREGS, pid, 0, data_ptr);
 
     v = rb_struct_new(rb_sPTraceRegStruct,
 		      ULONG2NUM(urs.ebx), ULONG2NUM(urs.ecx), ULONG2NUM(urs.edx),
@@ -334,7 +334,7 @@ ptrace_getsiginfo(VALUE self)
     long ret;
     VALUE v;
 
-    CALL_PTRACE(ret, PTRACE_GETSIGINFO, pid, 0, data_ptr);
+    CALL_PTRACE(ret, PT_GETSIGINFO, pid, 0, data_ptr);
 
     v = rb_hash_new();
 
@@ -408,7 +408,7 @@ ptrace_setregs(VALUE self, VALUE data)
     SET(xss);
 #undef SET
 
-    CALL_PTRACE(ret, PTRACE_SETREGS, pid, 0, data_ptr);
+    CALL_PTRACE(ret, PT_SETREGS, pid, 0, data_ptr);
     return Qnil;
 }
 
@@ -420,7 +420,7 @@ ptrace_setfpregs(VALUE self, VALUE data)
 }
 
 static VALUE
-ptrace_continue(VALUE self, enum __ptrace_request request, VALUE data)
+ptrace_continue(VALUE self, ptrace_request request, VALUE data)
 {
     pid_t pid = get_pid(self);
     long ret;
@@ -447,7 +447,7 @@ ptrace_cont(int argc, VALUE *argv, VALUE self)
     if (argc == 1) {
 	data = argv[0];
     }
-    return ptrace_continue(self, PTRACE_CONT, data);
+    return ptrace_continue(self, PT_CONTINUE, data);
 }
 
 static VALUE
@@ -457,7 +457,7 @@ ptrace_syscall(int argc, VALUE *argv, VALUE self)
     if (argc == 1) {
 	data = argv[0];
     }
-    return ptrace_continue(self, PTRACE_SYSCALL, data);
+    return ptrace_continue(self, PT_SYSCALL, data);
 }
 
 static VALUE
@@ -467,7 +467,7 @@ ptrace_singlestep(int argc, VALUE *argv, VALUE self)
     if (argc == 1) {
 	data = argv[0];
     }
-    return ptrace_continue(self, PTRACE_SINGLESTEP, data);
+    return ptrace_continue(self, PT_STEP, data);
 }
 
 #ifdef HAVE_PTRACE_SYSEMU
@@ -499,7 +499,7 @@ ptrace_kill(VALUE self)
 {
     pid_t pid = get_pid(self);
     long ret;
-    CALL_PTRACE(ret, PTRACE_KILL, pid, 0, 0);
+    CALL_PTRACE(ret, PT_KILL, pid, 0, 0);
     return Qnil;
 }
 
@@ -525,7 +525,7 @@ ptrace_detach(VALUE self)
 {
     pid_t pid = get_pid(self);
     long ret;
-    CALL_PTRACE(ret, PTRACE_DETACH, pid, 0, 0);
+    CALL_PTRACE(ret, PT_DETACH, pid, 0, 0);
     rb_ivar_set(self, id_ptrace_pid, Qnil);
     return Qnil;
 }
@@ -543,14 +543,14 @@ ptrace_attach(VALUE mod, VALUE pidv)
 {
     pid_t pid = NUM2LONG(pidv);
     long ret;
-    CALL_PTRACE(ret, PTRACE_ATTACH, pid, 0, 0);
+    CALL_PTRACE(ret, PT_ATTACH, pid, 0, 0);
     return ptrace_alloc(mod, pid);
 }
 
 static VALUE
 ptrace_traceme(VALUE mod)
 {
-    long ret = ptrace(PTRACE_TRACEME, 0, 0, 0);
+    long ret = ptrace(PT_TRACE_ME, 0, 0, 0);
 
     if (ret == -1) {
 	fprintf(stderr, "ptrace (PTRACE_TRACEME) error (%s:%d): %ld\n",
